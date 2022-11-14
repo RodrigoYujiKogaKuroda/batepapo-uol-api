@@ -27,16 +27,14 @@ const messageSchema = joi.object({
 
 /* Participants Routes */
 app.post("/participants", async (req, res) => {
-    const participant = req.body;
-
-    const validation = participantSchema.validate(participant, { abortEarly: true });
-
-    if (validation.error) {
-        res.sendStatus(422);
-        return;
-    }
-
     try {
+        const participant = req.body;
+        const validation = participantSchema.validate(participant, { abortEarly: true });
+        if (validation.error) {
+            res.sendStatus(422);
+            return;
+        }
+        
         const participants = await db.collection("participants").find().toArray();
         if (participants.some(e => e.name === participant.name)) {
             res.sendStatus(409);
@@ -74,17 +72,16 @@ app.get("/participants", async (req, res) => {
 
 /* Messages Routes */
 app.post("/messages", async (req, res) => {
-    const user = req.headers.user;
-    const messageBody = req.body;
-
-    const validation = messageSchema.validate(messageBody, { abortEarly: true });
-    const username = await db.collection("participants").findOne({ name: user });
-    if (validation.error || !username) {
-        res.sendStatus(422);
-        return;
-    }
-
     try {
+        const user = req.headers.user;
+        const messageBody = req.body;
+        const validation = messageSchema.validate(messageBody, { abortEarly: true });
+        const username = await db.collection("participants").findOne({ name: user });
+        if (validation.error || !username) {
+            res.sendStatus(422);
+            return;
+        }
+
         const messageToSend = {
             from: user,
             to: messageBody.to,
@@ -101,13 +98,13 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-    const user = req.headers.user;
-    if (!user) {
-        res.sendStatus(401);
-        return;
-    }
-
     try {
+        const user = req.headers.user;
+        if (!user) {
+            res.sendStatus(401);
+            return;
+        }
+
         const messages = await db.collection("messages").find().toArray();
         let messagesList = [];
         let limit = parseInt(req.query.limit);
@@ -134,7 +131,23 @@ app.get("/messages", async (req, res) => {
 
 /* Status Routes */
 app.post("/status", async (req, res) => {
+    try {
+        const user = req.headers.user;
+        const participantCollection = db.collection("participants");
+        const username = await participantCollection.findOne({ name: user });
+        if (!username) {
+            res.sendStatus(404);
+            return;
+        }
 
+        await participantCollection.updateOne({
+            name: user
+        }, {$set:{"lastStatus": Date.now()}});
+        res.sendStatus(200);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(500);
+    }
 });
 
 app.listen(5000, () => {
