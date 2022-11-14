@@ -16,7 +16,13 @@ const app = express();
 app.use(express.json());
 
 const participantSchema = joi.object({
-    name: joi.string().min(1).required()
+    name: joi.string().required()
+});
+
+const messageSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.any().valid('message', 'private_message').required()
 });
 
 /* Participants Routes */
@@ -44,7 +50,7 @@ app.post("/participants", async (req, res) => {
                 to: "Todos",
                 text: "entra na sala...",
                 type: "status",
-                time: "HH:MM:SS"
+                time: dayjs().format("HH:mm:ss")
             }
             await db.collection("participants").insertOne(participantData);
             await db.collection("messages").insertOne(message);
@@ -68,11 +74,62 @@ app.get("/participants", async (req, res) => {
 
 /* Messages Routes */
 app.post("/messages", async (req, res) => {
+    const user = req.headers.user;
+    const messageBody = req.body;
 
+    const validation = messageSchema.validate(messageBody, { abortEarly: true });
+    const username = await db.collection("participants").findOne({ name: user });
+    if (validation.error || !username) {
+        res.sendStatus(422);
+        return;
+    }
+
+    try {
+        const messageToSend = {
+            from: user,
+            to: messageBody.to,
+            text: messageBody.text,
+            type: messageBody.type,
+            time: dayjs().format("HH:mm:ss")
+        }
+        await db.collection("messages").insertOne(messageToSend);
+        res.sendStatus(201);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(500);
+    }
 });
 
 app.get("/messages", async (req, res) => {
+    const user = req.headers.user;
+    if (!user) {
+        res.sendStatus(401);
+        return;
+    }
 
+    try {
+        const messages = await db.collection("messages").find().toArray();
+        let messagesList = [];
+        let limit = parseInt(req.query.limit);
+        if (limit) {
+            if (limit > messages.length) {
+                limit = messages.length;
+            }
+        } else {
+            limit = messages.length;
+        }
+        for (let i = 0; i < limit; i++) {
+            if (messages.from === user.name ||
+                messages.to === "Todos" ||
+                messages.to === user.name) {
+                    messagesList.push(messages[i]);
+                }
+        }
+        res.send(messagesList);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(500);
+    }
 });
 
 /* Status Routes */
