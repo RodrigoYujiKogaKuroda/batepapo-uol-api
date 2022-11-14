@@ -21,7 +21,7 @@ const participantSchema = joi.object({
 
 /* Participants Routes */
 app.post("/participants", async (req, res) => {
-    const participant = req.body.name;
+    const participant = req.body;
 
     const validation = participantSchema.validate(participant, { abortEarly: true });
 
@@ -31,15 +31,16 @@ app.post("/participants", async (req, res) => {
     }
 
     try {
-        if (db.collection("participants").some(e => e.name === participant)) {
+        const participants = await db.collection("participants").find().toArray();
+        if (participants.some(e => e.name === participant.name)) {
             res.sendStatus(409);
         } else {
             const participantData = {
-                name: participant,
+                name: participant.name,
                 lastStatus: Date.now()
             }
             const message = {
-                from: participant,
+                from: participant.name,
                 to: "Todos",
                 text: "entra na sala...",
                 type: "status",
