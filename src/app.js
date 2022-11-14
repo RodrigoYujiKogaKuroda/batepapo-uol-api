@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import joi from 'joi';
@@ -13,6 +14,7 @@ mongoClient.connect(() => {
 });
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 const participantSchema = joi.object({
@@ -24,6 +26,29 @@ const messageSchema = joi.object({
     text: joi.string().required(),
     type: joi.any().valid('message', 'private_message').required()
 });
+
+/* Function to automatically remove users after 15s */
+function removeUser() {
+    const participants = db.collection("participants").find().toArray();
+    participants.then(users => {
+        const timeNow = Date.now();
+        for (let i = 0; i < users.length; i++) {
+            const timeUser = users[i].lastStatus;
+            if ((timeNow - timeUser) > 10000) {
+                const logoutMessage = {
+                    from: users[i].name,
+                    to: "Todos",
+                    text: "sai da sala...",
+                    type: "status",
+                    time: dayjs().format("HH:mm:ss")
+                }
+                db.collection("participants").deleteOne({ name: users[i].name });
+                db.collection("messages").insertOne(logoutMessage);
+            }
+        }
+    })
+}
+setInterval(removeUser, 15000);
 
 /* Participants Routes */
 app.post("/participants", async (req, res) => {
